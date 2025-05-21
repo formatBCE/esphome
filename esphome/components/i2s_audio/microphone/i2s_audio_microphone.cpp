@@ -366,6 +366,8 @@ void I2SAudioMicrophone::mic_task(void *params) {
     const size_t bytes_to_read = this_microphone->audio_stream_info_.ms_to_bytes(READ_DURATION_MS);
     std::vector<uint8_t> samples;
     samples.reserve(bytes_to_read);
+    std::vector<uint8_t> each_third_sample;
+    each_third_sample.reserve(samples.size() / 3);
 
     while (!(xEventGroupGetBits(this_microphone->event_group_) & COMMAND_STOP)) {
       if (this_microphone->data_callbacks_.size() > 0) {
@@ -375,12 +377,13 @@ void I2SAudioMicrophone::mic_task(void *params) {
         if (this_microphone->correct_dc_offset_) {
           this_microphone->fix_dc_offset_(samples);
         }
-        std::vector<uint8_t> each_third_sample; // Converting to 16000 from 48000
-        each_third_sample.reserve(samples.size() / 3);
 
-        for (size_t i = 2; i < samples.size(); i += 3) {
-            each_third_sample.push_back(samples[i]);
+        each_third_sample.resize(samples.size() / 3);
+        for (size_t i = 0; i < samples.size(); i += 24) {
+          size_t bytes_to_copy = std::min<size_t>(8, samples.size() - i);
+          each_third_sample.insert(result.end(), samples.begin() + i, samples.begin() + i + bytes_to_copy);
         }
+
         this_microphone->data_callbacks_.call(each_third_sample);
       } else {
         vTaskDelay(pdMS_TO_TICKS(READ_DURATION_MS));
