@@ -113,7 +113,7 @@ void I2SAudioMicrophone::configure_stream_settings_() {
     bits_per_sample = 16;  // PDM mics are always 16 bits per sample
   }
 
-  this->audio_stream_info_ = audio::AudioStreamInfo(bits_per_sample, channel_count, this->sample_rate_);
+  this->audio_stream_info_ = audio::AudioStreamInfo(bits_per_sample, channel_count, 16000);
 }
 
 void I2SAudioMicrophone::start() {
@@ -375,7 +375,13 @@ void I2SAudioMicrophone::mic_task(void *params) {
         if (this_microphone->correct_dc_offset_) {
           this_microphone->fix_dc_offset_(samples);
         }
-        this_microphone->data_callbacks_.call(samples);
+        std::vector<uint8_t> each_third_sample; // Converting to 16000 from 48000
+        each_third_sample.reserve(samples.size() / 3);
+
+        for (size_t i = 2; i < samples.size(); i += 3) {
+            each_third_sample.push_back(samples[i]);
+        }
+        this_microphone->data_callbacks_.call(each_third_sample);
       } else {
         vTaskDelay(pdMS_TO_TICKS(READ_DURATION_MS));
       }
