@@ -381,7 +381,7 @@ void I2SAudioMicrophone::mic_task(void *params) {
         each_third_sample.resize(samples.size() / 3);
         for (size_t i = 0; i < samples.size(); i += 24) {
           size_t bytes_to_copy = std::min<size_t>(8, samples.size() - i);
-          each_third_sample.insert(result.end(), samples.begin() + i, samples.begin() + i + bytes_to_copy);
+          each_third_sample.insert(each_third_sample.end(), samples.begin() + i, samples.begin() + i + bytes_to_copy);
         }
 
         this_microphone->data_callbacks_.call(each_third_sample);
