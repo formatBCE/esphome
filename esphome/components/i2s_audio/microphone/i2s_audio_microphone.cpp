@@ -366,8 +366,6 @@ void I2SAudioMicrophone::mic_task(void *params) {
     const size_t bytes_to_read = this_microphone->audio_stream_info_.ms_to_bytes(READ_DURATION_MS);
     std::vector<uint8_t> samples;
     samples.reserve(bytes_to_read);
-    std::vector<uint8_t> each_third_sample;
-    each_third_sample.reserve(samples.size() / 3);
 
     while (!(xEventGroupGetBits(this_microphone->event_group_) & COMMAND_STOP)) {
       if (this_microphone->data_callbacks_.size() > 0) {
@@ -378,10 +376,19 @@ void I2SAudioMicrophone::mic_task(void *params) {
           this_microphone->fix_dc_offset_(samples);
         }
 
-        each_third_sample.resize(samples.size() / 3);
-        for (size_t i = 0; i < samples.size(); i += 24) {
-          size_t bytes_to_copy = std::min<size_t>(8, samples.size() - i);
-          each_third_sample.insert(each_third_sample.end(), samples.begin() + i, samples.begin() + i + bytes_to_copy);
+        std::vector<uint8_t> each_third_sample;
+        size_t block_size = 24;
+        size_t copy_size = 8;
+        size_t total_blocks = samples.size() / block_size;
+
+        each_third_sample.resize(total_blocks * copy_size);
+
+        for (size_t block = 0; block < total_blocks; ++block) {
+            std::copy_n(
+                samples.begin() + block * block_size,
+                copy_size,
+                each_third_sample.begin() + block * copy_size
+            );
         }
 
         this_microphone->data_callbacks_.call(each_third_sample);
