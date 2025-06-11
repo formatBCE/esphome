@@ -1,9 +1,9 @@
 #ifdef USE_ARDUINO
 
 #include "i2c_bus_arduino.h"
-#include "esphome/core/log.h"
-#include "esphome/core/helpers.h"
 #include "esphome/core/application.h"
+#include "esphome/core/helpers.h"
+#include "esphome/core/log.h"
 #include <Arduino.h>
 #include <cstring>
 
@@ -70,9 +70,11 @@ void ArduinoI2CBus::set_pins_and_clock_() {
 
 void ArduinoI2CBus::dump_config() {
   ESP_LOGCONFIG(TAG, "I2C Bus:");
-  ESP_LOGCONFIG(TAG, "  SDA Pin: GPIO%u", this->sda_pin_);
-  ESP_LOGCONFIG(TAG, "  SCL Pin: GPIO%u", this->scl_pin_);
-  ESP_LOGCONFIG(TAG, "  Frequency: %u Hz", this->frequency_);
+  ESP_LOGCONFIG(TAG,
+                "  SDA Pin: GPIO%u\n"
+                "  SCL Pin: GPIO%u\n"
+                "  Frequency: %u Hz",
+                this->sda_pin_, this->scl_pin_, this->frequency_);
   if (timeout_ > 0) {
 #if defined(USE_ESP32)
     ESP_LOGCONFIG(TAG, "  Timeout: %u ms", this->timeout_ / 1000);
