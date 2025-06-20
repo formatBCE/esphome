@@ -1,9 +1,9 @@
 #ifdef USE_ESP32
 
 #include "esp32_camera.h"
-#include "esphome/core/log.h"
-#include "esphome/core/hal.h"
 #include "esphome/core/application.h"
+#include "esphome/core/hal.h"
+#include "esphome/core/log.h"
 
 #include <freertos/task.h>
 
@@ -15,6 +15,12 @@ static const char *const TAG = "esp32_camera";
 /* ---------------- public API (derivated) ---------------- */
 void ESP32Camera::setup() {
   global_esp32_camera = this;
+
+#ifdef USE_I2C
+  if (this->i2c_bus_ != nullptr) {
+    this->config_.sccb_i2c_port = this->i2c_bus_->get_port();
+  }
+#endif
 
   /* initialize time to now */
   this->last_update_ = millis();
@@ -57,7 +63,7 @@ void ESP32Camera::dump_config() {
                 "  External Clock: Pin:%d Frequency:%u\n"
                 "  I2C Pins: SDA:%d SCL:%d\n"
                 "  Reset Pin: %d",
-                this->name_.c_str(), YESNO(this->internal_), conf.pin_d0, conf.pin_d1, conf.pin_d2, conf.pin_d3,
+                this->name_.c_str(), YESNO(this->is_internal()), conf.pin_d0, conf.pin_d1, conf.pin_d2, conf.pin_d3,
                 conf.pin_d4, conf.pin_d5, conf.pin_d6, conf.pin_d7, conf.pin_vsync, conf.pin_href, conf.pin_pclk,
                 conf.pin_xclk, conf.xclk_freq_hz, conf.pin_sccb_sda, conf.pin_sccb_scl, conf.pin_reset);
   switch (this->config_.frame_size) {
@@ -246,6 +252,13 @@ void ESP32Camera::set_i2c_pins(uint8_t sda, uint8_t scl) {
   this->config_.pin_sccb_sda = sda;
   this->config_.pin_sccb_scl = scl;
 }
+#ifdef USE_I2C
+void ESP32Camera::set_i2c_id(i2c::InternalI2CBus *i2c_bus) {
+  this->i2c_bus_ = i2c_bus;
+  this->config_.pin_sccb_sda = -1;
+  this->config_.pin_sccb_scl = -1;
+}
+#endif  // USE_I2C
 void ESP32Camera::set_reset_pin(uint8_t pin) { this->config_.pin_reset = pin; }
 void ESP32Camera::set_power_down_pin(uint8_t pin) { this->config_.pin_pwdn = pin; }
 

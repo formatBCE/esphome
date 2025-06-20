@@ -106,7 +106,7 @@ void APIServer::setup() {
   }
 #endif
 
-  this->last_connected_ = millis();
+  this->last_connected_ = App.get_loop_component_start_time();
 
 #ifdef USE_ESP32_CAMERA
   if (esp32_camera::global_esp32_camera != nullptr && !esp32_camera::global_esp32_camera->is_internal()) {
@@ -164,7 +164,7 @@ void APIServer::loop() {
   }
 
   if (this->reboot_timeout_ != 0) {
-    const uint32_t now = millis();
+    const uint32_t now = App.get_loop_component_start_time();
     if (!this->is_connected()) {
       if (now - this->last_connected_ > this->reboot_timeout_) {
         ESP_LOGE(TAG, "No client connected; rebooting");
@@ -227,7 +227,7 @@ bool APIServer::check_password(const std::string &password) const {
 void APIServer::handle_disconnect(APIConnection *conn) {}
 
 #ifdef USE_BINARY_SENSOR
-void APIServer::on_binary_sensor_update(binary_sensor::BinarySensor *obj, bool state) {
+void APIServer::on_binary_sensor_update(binary_sensor::BinarySensor *obj) {
   if (obj->is_internal())
     return;
   for (auto &c : this->clients_)
