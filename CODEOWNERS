@@ -248,6 +248,7 @@ esphome/components/libretiny_pwm/* @kuba2k2
 esphome/components/light/* @esphome/core
 esphome/components/lightwaverf/* @max246
 esphome/components/lilygo_t5_47/touchscreen/* @jesserockz
+esphome/components/ln882x/* @lamauny
 esphome/components/lock/* @esphome/core
 esphome/components/logger/* @esphome/core
 esphome/components/logger/select/* @clydebarrow
@@ -332,6 +333,7 @@ esphome/components/pca6416a/* @Mat931
 esphome/components/pca9554/* @clydebarrow @hwstar
 esphome/components/pcf85063/* @brogon
 esphome/components/pcf8563/* @KoenBreeman
+esphome/components/pi4ioe5v6408/* @jesserockz
 esphome/components/pid/* @OttoWinter
 esphome/components/pipsolar/* @andreashergert1984
 esphome/components/pm1006/* @habbie
@@ -496,6 +498,7 @@ esphome/components/voice_assistant/* @jesserockz @kahrendt
 esphome/components/wake_on_lan/* @clydebarrow @willwill2will54
 esphome/components/watchdog/* @oarcher
 esphome/components/waveshare_epaper/* @clydebarrow
+esphome/components/web_server/ota/* @esphome/core
 esphome/components/web_server_base/* @OttoWinter
 esphome/components/web_server_idf/* @dentra
 esphome/components/weikai/* @DrCoolZic

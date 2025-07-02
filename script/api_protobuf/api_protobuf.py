@@ -526,11 +526,15 @@ class BytesType(TypeInfo):
     reference_type = "std::string &"
     const_reference_type = "const std::string &"
     decode_length = "value.as_string()"
-    encode_func = "encode_string"
+    encode_func = "encode_bytes"
     wire_type = WireType.LENGTH_DELIMITED  # Uses wire type 2
 
+    @property
+    def encode_content(self) -> str:
+        return f"buffer.encode_bytes({self.number}, reinterpret_cast<const uint8_t*>(this->{self.field_name}.data()), this->{self.field_name}.size());"
+
     def dump(self, name: str) -> str:
-        o = f'out.append("\'").append({name}).append("\'");'
+        o = f"out.append(format_hex_pretty({name}));"
         return o
 
     def get_size_calculation(self, name: str, force: bool = False) -> str:
@@ -1034,7 +1038,7 @@ SOURCE_BOTH = 0
 SOURCE_SERVER = 1
 SOURCE_CLIENT = 2
 
-RECEIVE_CASES: dict[int, str] = {}
+RECEIVE_CASES: dict[int, tuple[str, str | None]] = {}
 
 ifdefs: dict[str, str] = {}
 
@@ -1208,8 +1212,6 @@ def build_service_message_type(
         func = f"on_{snake}"
         hout += f"virtual void {func}(const {mt.name} &value){{}};\n"
         case = ""
-        if ifdef is not None:
-            case += f"#ifdef {ifdef}\n"
         case += f"{mt.name} msg;\n"
         case += "msg.decode(msg_data, msg_size);\n"
         if log:
@@ -1217,10 +1219,9 @@ def build_service_message_type(
             case += f'ESP_LOGVV(TAG, "{func}: %s", msg.dump().c_str());\n'
             case += "#endif\n"
         case += f"this->{func}(msg);\n"
-        if ifdef is not None:
-            case += "#endif\n"
         case += "break;"
-        RECEIVE_CASES[id_] = case
+        # Store the ifdef with the case for later use
+        RECEIVE_CASES[id_] = (case, ifdef)
 
         # Only close ifdef if we opened it
         if ifdef is not None:
@@ -1258,6 +1259,7 @@ def main() -> None:
     #include "api_pb2.h"
     #include "api_pb2_size.h"
     #include "esphome/core/log.h"
+    #include "esphome/core/helpers.h"
 
     #include <cinttypes>
 
@@ -1379,18 +1381,21 @@ def main() -> None:
     cases = list(RECEIVE_CASES.items())
     cases.sort()
     hpp += " protected:\n"
-    hpp += "  bool read_message(uint32_t msg_size, uint32_t msg_type, uint8_t *msg_data) override;\n"
-    out = f"bool {class_name}::read_message(uint32_t msg_size, uint32_t msg_type, uint8_t *msg_data) {{\n"
+    hpp += "  void read_message(uint32_t msg_size, uint32_t msg_type, uint8_t *msg_data) override;\n"
+    out = f"void {class_name}::read_message(uint32_t msg_size, uint32_t msg_type, uint8_t *msg_data) {{\n"
     out += "  switch (msg_type) {\n"
-    for i, case in cases:
-        c = f"case {i}: {{\n"
-        c += indent(case) + "\n"
-        c += "}"
-        out += indent(c, "    ") + "\n"
+    for i, (case, ifdef) in cases:
+        if ifdef is not None:
+            out += f"#ifdef {ifdef}\n"
+        c = f"    case {i}: {{\n"
+        c += indent(case, "      ") + "\n"
+        c += "    }"
+        out += c + "\n"
+        if ifdef is not None:
+            out += "#endif\n"
     out += "    default:\n"
-    out += "      return false;\n"
+    out += "      break;\n"
     out += "  }\n"
-    out += "  return true;\n"
     out += "}\n"
     cpp += out
     hpp += "};\n"
