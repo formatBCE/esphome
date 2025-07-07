@@ -24,6 +24,14 @@ static const char *const TAG = "api";
 // APIServer
 APIServer *global_api_server = nullptr;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
+#ifndef USE_API_YAML_SERVICES
+// Global empty vector to avoid guard variables (saves 8 bytes)
+// This is initialized at program startup before any threads
+static const std::vector<UserServiceDescriptor *> empty_user_services{};
+
+const std::vector<UserServiceDescriptor *> &get_empty_user_services_instance() { return empty_user_services; }
+#endif
+
 APIServer::APIServer() {
   global_api_server = this;
   // Pre-allocate shared write buffer
@@ -111,15 +119,14 @@ void APIServer::setup() {
   }
 #endif
 
-#ifdef USE_ESP32_CAMERA
-  if (esp32_camera::global_esp32_camera != nullptr && !esp32_camera::global_esp32_camera->is_internal()) {
-    esp32_camera::global_esp32_camera->add_image_callback(
-        [this](const std::shared_ptr<esp32_camera::CameraImage> &image) {
-          for (auto &c : this->clients_) {
-            if (!c->flags_.remove)
-              c->set_camera_state(image);
-          }
-        });
+#ifdef USE_CAMERA
+  if (camera::Camera::instance() != nullptr && !camera::Camera::instance()->is_internal()) {
+    camera::Camera::instance()->add_image_callback([this](const std::shared_ptr<camera::CameraImage> &image) {
+      for (auto &c : this->clients_) {
+        if (!c->flags_.remove)
+          c->set_camera_state(image);
+      }
+    });
   }
 #endif
 }
@@ -218,6 +225,7 @@ void APIServer::dump_config() {
 #endif
 }
 
+#ifdef USE_API_PASSWORD
 bool APIServer::uses_password() const { return !this->password_.empty(); }
 
 bool APIServer::check_password(const std::string &password) const {
@@ -248,6 +256,7 @@ bool APIServer::check_password(const std::string &password) const {
 
   return result == 0;
 }
+#endif
 
 void APIServer::handle_disconnect(APIConnection *conn) {}
 
@@ -431,7 +440,9 @@ float APIServer::get_setup_priority() const { return setup_priority::AFTER_WIFI;
 
 void APIServer::set_port(uint16_t port) { this->port_ = port; }
 
+#ifdef USE_API_PASSWORD
 void APIServer::set_password(const std::string &password) { this->password_ = password; }
+#endif
 
 void APIServer::set_batch_delay(uint16_t batch_delay) { this->batch_delay_ = batch_delay; }
 
