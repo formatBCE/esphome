@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from aioesphomeapi import EntityState
+from aioesphomeapi import EntityState, SensorState
 import pytest
 
 from .types import APIClientConnectedFactory, RunCompiledFunction
@@ -30,7 +30,7 @@ async def test_host_mode_many_entities(
             sensor_states = [
                 s
                 for s in states.values()
-                if hasattr(s, "state") and isinstance(s.state, float)
+                if isinstance(s, SensorState) and isinstance(s.state, float)
             ]
             # When we have received states from at least 50 sensors, resolve the future
             if len(sensor_states) >= 50 and not sensor_count_future.done():
@@ -41,11 +41,11 @@ async def test_host_mode_many_entities(
         # Wait for states from at least 50 sensors with timeout
         try:
             sensor_count = await asyncio.wait_for(sensor_count_future, timeout=10.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             sensor_states = [
                 s
                 for s in states.values()
-                if hasattr(s, "state") and isinstance(s.state, float)
+                if isinstance(s, SensorState) and isinstance(s.state, float)
             ]
             pytest.fail(
                 f"Did not receive states from at least 50 sensors within 10 seconds. "
@@ -61,7 +61,7 @@ async def test_host_mode_many_entities(
         sensor_states = [
             s
             for s in states.values()
-            if hasattr(s, "state") and isinstance(s.state, float)
+            if isinstance(s, SensorState) and isinstance(s.state, float)
         ]
 
         assert sensor_count >= 50, (

@@ -1,6 +1,7 @@
 from collections.abc import Callable
 import logging
 
+import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.const import (
     CONF_DEVICE_ID,
@@ -108,6 +109,8 @@ async def setup_entity(var: MockObj, config: ConfigType, platform: str) -> None:
     if CONF_INTERNAL in config:
         add(var.set_internal(config[CONF_INTERNAL]))
     if CONF_ICON in config:
+        # Add USE_ENTITY_ICON define when icons are used
+        cg.add_define("USE_ENTITY_ICON")
         add(var.set_icon(config[CONF_ICON]))
     if CONF_ENTITY_CATEGORY in config:
         add(var.set_entity_category(config[CONF_ENTITY_CATEGORY]))
@@ -184,14 +187,23 @@ def entity_duplicate_validator(platform: str) -> Callable[[ConfigType], ConfigTy
             # No name to validate
             return config
 
+        # Skip validation for internal entities
+        # Internal entities are not exposed to Home Assistant and don't use the hash-based
+        # entity state tracking system, so name collisions don't matter for them
+        if config.get(CONF_INTERNAL, False):
+            return config
+
         # Get the entity name
         entity_name = config[CONF_NAME]
 
         # Get device name if entity is on a sub-device
         device_name = None
+        device_id = ""  # Empty string for main device
         if CONF_DEVICE_ID in config:
             device_id_obj = config[CONF_DEVICE_ID]
             device_name = device_id_obj.id
+            # Use the device ID string directly for uniqueness
+            device_id = device_id_obj.id
 
         # Calculate what object_id will actually be used
         # This handles empty names correctly by using device/friendly names
@@ -200,11 +212,12 @@ def entity_duplicate_validator(platform: str) -> Callable[[ConfigType], ConfigTy
         )
 
         # Check for duplicates
-        unique_key = (platform, name_key)
+        unique_key = (device_id, platform, name_key)
         if unique_key in CORE.unique_ids:
+            device_prefix = f" on device '{device_id}'" if device_id else ""
             raise cv.Invalid(
-                f"Duplicate {platform} entity with name '{entity_name}' found. "
-                f"Each entity must have a unique name within its platform across all devices."
+                f"Duplicate {platform} entity with name '{entity_name}' found{device_prefix}. "
+                f"Each entity on a device must have a unique name within its platform."
             )
 
         # Add to tracking set

@@ -5,13 +5,8 @@ from esphome.config_helpers import Extend, Remove, merge_config
 import esphome.config_validation as cv
 from esphome.const import CONF_SUBSTITUTIONS, VALID_SUBSTITUTIONS_CHARACTERS
 from esphome.yaml_util import ESPHomeDataBase, make_data_base
-from .jinja import (
-    Jinja,
-    JinjaStr,
-    has_jinja,
-    TemplateError,
-    TemplateRuntimeError,
-)
+
+from .jinja import Jinja, JinjaStr, TemplateError, TemplateRuntimeError, has_jinja
 
 CODEOWNERS = ["@esphome/core"]
 _LOGGER = logging.getLogger(__name__)
@@ -151,8 +146,11 @@ def _substitute_item(substitutions, item, path, jinja, ignore_missing):
             if sub is not None:
                 item[k] = sub
         for old, new in replace_keys:
-            item[new] = merge_config(item.get(old), item.get(new))
-            del item[old]
+            if str(new) == str(old):
+                item[new] = item[old]
+            else:
+                item[new] = merge_config(item.get(old), item.get(new))
+                del item[old]
     elif isinstance(item, str):
         sub = _expand_substitutions(substitutions, item, path, jinja, ignore_missing)
         if isinstance(sub, JinjaStr) or sub != item:
