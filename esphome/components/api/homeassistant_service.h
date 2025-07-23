@@ -11,6 +11,18 @@ namespace esphome {
 namespace api {
 
 template<typename... X> class TemplatableStringValue : public TemplatableValue<std::string, X...> {
+ private:
+  // Helper to convert value to string - handles the case where value is already a string
+  template<typename T> static std::string value_to_string(T &&val) { return to_string(std::forward<T>(val)); }
+
+  // Overloads for string types - needed because std::to_string doesn't support them
+  static std::string value_to_string(char *val) {
+    return val ? std::string(val) : std::string();
+  }  // For lambdas returning char* (e.g., itoa)
+  static std::string value_to_string(const char *val) { return std::string(val); }  // For lambdas returning .c_str()
+  static std::string value_to_string(const std::string &val) { return val; }
+  static std::string value_to_string(std::string &&val) { return std::move(val); }
+
  public:
   TemplatableStringValue() : TemplatableValue<std::string, X...>() {}
 
@@ -19,7 +31,7 @@ template<typename... X> class TemplatableStringValue : public TemplatableValue<s
 
   template<typename F, enable_if_t<is_invocable<F, X...>::value, int> = 0>
   TemplatableStringValue(F f)
-      : TemplatableValue<std::string, X...>([f](X... x) -> std::string { return to_string(f(x...)); }) {}
+      : TemplatableValue<std::string, X...>([f](X... x) -> std::string { return value_to_string(f(x...)); }) {}
 };
 
 template<typename... Ts> class TemplatableKeyValuePair {
@@ -47,25 +59,29 @@ template<typename... Ts> class HomeAssistantServiceCallAction : public Action<Ts
 
   void play(Ts... x) override {
     HomeassistantServiceResponse resp;
-    resp.service = this->service_.value(x...);
+    std::string service_value = this->service_.value(x...);
+    resp.set_service(StringRef(service_value));
     resp.is_event = this->is_event_;
     for (auto &it : this->data_) {
-      HomeassistantServiceMap kv;
-      kv.key = it.key;
-      kv.value = it.value.value(x...);
-      resp.data.push_back(kv);
+      resp.data.emplace_back();
+      auto &kv = resp.data.back();
+      kv.set_key(StringRef(it.key));
+      std::string value = it.value.value(x...);
+      kv.set_value(StringRef(value));
     }
     for (auto &it : this->data_template_) {
-      HomeassistantServiceMap kv;
-      kv.key = it.key;
-      kv.value = it.value.value(x...);
-      resp.data_template.push_back(kv);
+      resp.data_template.emplace_back();
+      auto &kv = resp.data_template.back();
+      kv.set_key(StringRef(it.key));
+      std::string value = it.value.value(x...);
+      kv.set_value(StringRef(value));
     }
     for (auto &it : this->variables_) {
-      HomeassistantServiceMap kv;
-      kv.key = it.key;
-      kv.value = it.value.value(x...);
-      resp.variables.push_back(kv);
+      resp.variables.emplace_back();
+      auto &kv = resp.variables.back();
+      kv.set_key(StringRef(it.key));
+      std::string value = it.value.value(x...);
+      kv.set_value(StringRef(value));
     }
     this->parent_->send_homeassistant_service_call(resp);
   }
