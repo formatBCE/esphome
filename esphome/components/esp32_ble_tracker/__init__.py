@@ -36,6 +36,7 @@ from esphome.types import ConfigType
 
 AUTO_LOAD = ["esp32_ble"]
 DEPENDENCIES = ["esp32"]
+CODEOWNERS = ["@bdraco"]
 
 KEY_ESP32_BLE_TRACKER = "esp32_ble_tracker"
 KEY_USED_CONNECTION_SLOTS = "used_connection_slots"
@@ -310,9 +311,7 @@ async def to_code(config):
     for conf in config.get(CONF_ON_BLE_ADVERTISE, []):
         trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)
         if CONF_MAC_ADDRESS in conf:
-            addr_list = []
-            for it in conf[CONF_MAC_ADDRESS]:
-                addr_list.append(it.as_hex)
+            addr_list = [it.as_hex for it in conf[CONF_MAC_ADDRESS]]
             cg.add(trigger.set_addresses(addr_list))
         await automation.build_automation(trigger, [(ESPBTDeviceConstRef, "x")], conf)
     for conf in config.get(CONF_ON_BLE_SERVICE_DATA_ADVERTISE, []):

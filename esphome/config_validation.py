@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime
 from ipaddress import (
@@ -87,7 +87,7 @@ from esphome.core import (
     TimePeriodNanoseconds,
     TimePeriodSeconds,
 )
-from esphome.helpers import add_class_to_obj, list_starts_with
+from esphome.helpers import add_class_to_obj, docs_url, list_starts_with
 from esphome.schema_extractors import (
     SCHEMA_EXTRACT,
     schema_extractor,
@@ -291,6 +291,8 @@ class Version:
     extra: str = ""
 
     def __str__(self):
+        if self.extra:
+            return f"{self.major}.{self.minor}.{self.patch}-{self.extra}"
         return f"{self.major}.{self.minor}.{self.patch}"
 
     @classmethod
@@ -664,14 +666,6 @@ def only_with_framework(
     if suggestions is None:
         suggestions = {}
 
-    version = Version.parse(ESPHOME_VERSION)
-    if version.is_beta:
-        docs_format = "https://beta.esphome.io/components/{path}"
-    elif version.is_dev:
-        docs_format = "https://next.esphome.io/components/{path}"
-    else:
-        docs_format = "https://esphome.io/components/{path}"
-
     def validator_(obj):
         if CORE.target_framework not in frameworks:
             err_str = f"This feature is only available with framework(s) {', '.join([framework.value for framework in frameworks])}"
@@ -679,7 +673,7 @@ def only_with_framework(
                 (component, docs_path) = suggestion
                 err_str += f"\nPlease use '{component}'"
                 if docs_path:
-                    err_str += f": {docs_format.format(path=docs_path)}"
+                    err_str += f": {docs_url(path=f'components/{docs_path}')}"
             raise Invalid(err_str)
         return obj
 
@@ -1866,7 +1860,7 @@ def validate_registry_entry(name, registry):
 
 def none(value):
     if value in ("none", "None"):
-        return None
+        return
     raise Invalid("Must be none")
 
 
@@ -2113,10 +2107,8 @@ def require_esphome_version(year, month, patch):
 
 @contextmanager
 def suppress_invalid():
-    try:
+    with suppress(vol.Invalid):
         yield
-    except vol.Invalid:
-        pass
 
 
 GIT_SCHEMA = Schema(

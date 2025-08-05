@@ -1,10 +1,12 @@
 from esphome import automation
 from esphome.automation import Condition
 import esphome.codegen as cg
+from esphome.components.const import CONF_USE_PSRAM
 from esphome.components.esp32 import add_idf_sdkconfig_option, const, get_esp32_variant
 from esphome.components.network import IPAddress
 from esphome.config_helpers import filter_source_files_from_platform
 import esphome.config_validation as cv
+from esphome.config_validation import only_with_esp_idf
 from esphome.const import (
     CONF_AP,
     CONF_BSSID,
@@ -263,8 +265,6 @@ def _validate(config):
         networks = config.get(CONF_NETWORKS, [])
         if not networks:
             raise cv.Invalid("At least one network required for fast_connect!")
-        if len(networks) != 1:
-            raise cv.Invalid("Fast connect can only be used with one network!")
 
     if CONF_USE_ADDRESS not in config:
         use_address = CORE.name + config[CONF_DOMAIN]
@@ -333,6 +333,9 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_ON_CONNECT): automation.validate_automation(single=True),
             cv.Optional(CONF_ON_DISCONNECT): automation.validate_automation(
                 single=True
+            ),
+            cv.Optional(CONF_USE_PSRAM): cv.All(
+                only_with_esp_idf, cv.requires_component("psram"), cv.boolean
             ),
         }
     ),
@@ -442,9 +445,7 @@ async def to_code(config):
 
     if CORE.is_esp8266:
         cg.add_library("ESP8266WiFi", None)
-    elif CORE.is_esp32 and CORE.using_arduino:
-        cg.add_library("WiFi", None)
-    elif CORE.is_rp2040:
+    elif (CORE.is_esp32 and CORE.using_arduino) or CORE.is_rp2040:
         cg.add_library("WiFi", None)
 
     if CORE.is_esp32 and CORE.using_esp_idf:
@@ -456,6 +457,8 @@ async def to_code(config):
         if config[CONF_ENABLE_RRM]:
             cg.add(var.set_rrm(config[CONF_ENABLE_RRM]))
 
+    if config.get(CONF_USE_PSRAM):
+        add_idf_sdkconfig_option("CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP", True)
     cg.add_define("USE_WIFI")
 
     # must register before OTA safe mode check

@@ -48,7 +48,7 @@ class BLEClientBase : public espbt::ESPBTClient, public Component {
 
   void set_auto_connect(bool auto_connect) { this->auto_connect_ = auto_connect; }
 
-  void set_address(uint64_t address) {
+  virtual void set_address(uint64_t address) {
     this->address_ = address;
     this->remote_bda_[0] = (address >> 40) & 0xFF;
     this->remote_bda_[1] = (address >> 32) & 0xFF;
@@ -66,7 +66,7 @@ class BLEClientBase : public espbt::ESPBTClient, public Component {
                        (uint8_t) (this->address_ >> 0) & 0xff);
     }
   }
-  std::string address_str() const { return this->address_str_; }
+  const std::string &address_str() const { return this->address_str_; }
 
   BLEService *get_service(espbt::ESPBTUUID uuid);
   BLEService *get_service(uint16_t uuid);
@@ -127,6 +127,7 @@ class BLEClientBase : public espbt::ESPBTClient, public Component {
   // 6 bytes used, 2 bytes padding
 
   void log_event_(const char *name);
+  void restore_medium_conn_params_();
 };
 
 }  // namespace esp32_ble_client
