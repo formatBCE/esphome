@@ -10,7 +10,7 @@ from esphome.components.esp32.const import (
     VARIANT_ESP32C3,
     VARIANT_ESP32C5,
     VARIANT_ESP32C6,
-    VARIANT_ESP32C61,
+    # VARIANT_ESP32C61,  // no such constant in release yet
     VARIANT_ESP32H2,
     VARIANT_ESP32P4,
     VARIANT_ESP32S2,
@@ -76,7 +76,7 @@ I2S_PORTS = {
     VARIANT_ESP32C3: 1,
     VARIANT_ESP32C5: 1,
     VARIANT_ESP32C6: 1,
-    VARIANT_ESP32C61: 1,
+    # VARIANT_ESP32C61: 1, // no such constant in release yet
     VARIANT_ESP32H2: 1,
     VARIANT_ESP32P4: 3,
     VARIANT_ESP32S2: 1,
