@@ -1,20 +1,17 @@
 from esphome import pins
 import esphome.codegen as cg
 from esphome.components.esp32 import (
-    add_idf_sdkconfig_option,
-    get_esp32_variant,
-    include_builtin_idf_component,
-)
-from esphome.components.esp32.const import (
     VARIANT_ESP32,
     VARIANT_ESP32C3,
     VARIANT_ESP32C5,
     VARIANT_ESP32C6,
-    # VARIANT_ESP32C61,  // no such constant in release yet
+    VARIANT_ESP32C61,
     VARIANT_ESP32H2,
     VARIANT_ESP32P4,
     VARIANT_ESP32S2,
     VARIANT_ESP32S3,
+    add_idf_sdkconfig_option,
+    get_esp32_variant,
 )
 import esphome.config_validation as cv
 from esphome.const import CONF_BITS_PER_SAMPLE, CONF_CHANNEL, CONF_ID, CONF_SAMPLE_RATE
@@ -76,7 +73,7 @@ I2S_PORTS = {
     VARIANT_ESP32C3: 1,
     VARIANT_ESP32C5: 1,
     VARIANT_ESP32C6: 1,
-    # VARIANT_ESP32C61: 1, // no such constant in release yet
+    VARIANT_ESP32C61: 1,
     VARIANT_ESP32H2: 1,
     VARIANT_ESP32P4: 3,
     VARIANT_ESP32S2: 1,
@@ -275,10 +272,6 @@ FINAL_VALIDATE_SCHEMA = _final_validate
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
-
-    # Re-enable ESP-IDF's I2S driver (excluded by default to save compile time)
-    include_builtin_idf_component("esp_driver_i2s")
-
     if use_legacy():
         cg.add_define("USE_I2S_LEGACY")
 
