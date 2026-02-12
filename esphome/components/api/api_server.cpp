@@ -148,8 +148,11 @@ void APIServer::loop() {
   while (client_index < this->clients_.size()) {
     auto &client = this->clients_[client_index];
 
-    // Common case: process active client
-    if (!client->flags_.remove) {
+    if (client->flags_.remove) {
+      // Rare case: handle disconnection (don't increment - swapped element needs processing)
+      this->remove_client_(client_index);
+    } else {
+      // Common case: process active client
       client->loop();
     }
     // Handle disconnection promptly - close socket to free LWIP PCB
