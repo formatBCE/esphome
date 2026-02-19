@@ -21,9 +21,7 @@
 namespace esphome::ld2420 {
 
 static constexpr uint8_t CALIBRATE_SAMPLES = 64;
-// Energy frame is 45 bytes; +1 for null terminator, +4 so that a frame footer always lands
-// inside the buffer during footer-based resynchronization after losing sync.
-static constexpr uint8_t MAX_LINE_LENGTH = 50;
+static constexpr uint8_t MAX_LINE_LENGTH = 46;  // Max characters for serial buffer
 static constexpr uint8_t TOTAL_GATES = 16;
 
 enum OpMode : uint8_t {
