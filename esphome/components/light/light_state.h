@@ -13,6 +13,7 @@
 
 #include "esphome/core/hal.h"
 #include "esphome/core/helpers.h"
+#include "esphome/core/progmem.h"
 #include <strings.h>
 #include <vector>
 
@@ -216,6 +217,20 @@ class LightState : public EntityBase, public Component {
       }
     }
     return 0;  // Effect not found
+  }
+
+  /// Get effect index by name (const char* overload, avoids std::string construction).
+  uint32_t get_effect_index(const char *name, size_t len) const {
+    if (len == 4 && ESPHOME_strncasecmp_P(name, ESPHOME_PSTR("none"), 4) == 0) {
+      return 0;
+    }
+    StringRef ref(name, len);
+    for (size_t i = 0; i < this->effects_.size(); i++) {
+      if (str_equals_case_insensitive(ref, this->effects_[i]->get_name())) {
+        return i + 1;
+      }
+    }
+    return 0;
   }
 
   /// Get effect by index. Returns nullptr if index is invalid.
