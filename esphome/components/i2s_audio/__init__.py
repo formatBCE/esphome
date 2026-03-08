@@ -274,6 +274,8 @@ async def to_code(config):
     await cg.register_component(var, config)
     if use_legacy():
         cg.add_define("USE_I2S_LEGACY")
+        # Legacy I2S API lives in the "driver" shim component (driver/i2s.h)
+        include_builtin_idf_component("driver")
 
     # Helps avoid callbacks being skipped due to processor load
     add_idf_sdkconfig_option("CONFIG_I2S_ISR_IRAM_SAFE", True)
