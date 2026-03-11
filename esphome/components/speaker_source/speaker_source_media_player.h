@@ -28,7 +28,7 @@ namespace esphome::speaker_source {
 //
 // - Main loop task: setup(), loop(), dump_config(), handle_media_state_changed_(),
 //   handle_volume_request_(), handle_mute_request_(), handle_play_uri_request_(),
-//   set_volume_(), set_mute_state_(), control(), get_media_pipeline_state_(),
+//   set_volume_(), set_mute_state_(), control(), get_source_state_(),
 //   find_source_for_uri_(), try_execute_play_uri_(), save_volume_restore_state_(),
 //   process_control_queue_(), handle_player_command_(), queue_command_(), queue_play_current_()
 //
@@ -55,6 +55,7 @@ namespace esphome::speaker_source {
 
 enum Pipeline : uint8_t {
   MEDIA_PIPELINE = 0,
+  ANNOUNCEMENT_PIPELINE = 1,
 };
 
 enum RepeatMode : uint8_t {
@@ -85,10 +86,10 @@ struct SourceBinding : public media_source::MediaSourceListener {
   void request_play_uri(const std::string &uri) override;
 };
 
-struct PipelineContext {
-  /// @brief Timeout IDs for playlist delay, indexed by Pipeline enum
-  static constexpr const char *const TIMEOUT_IDS[] = {"next_media"};
+/// @brief Timeout IDs for playlist delay, indexed by Pipeline enum
+static constexpr uint32_t PIPELINE_TIMEOUT_IDS[] = {1, 2};
 
+struct PipelineContext {
   speaker::Speaker *speaker{nullptr};
   optional<media_player::MediaPlayerSupportedFormat> format;
 
@@ -132,7 +133,7 @@ struct MediaPlayerControlCommand {
     SEND_COMMAND,      // Send command to active source
   };
   Type type;
-  uint8_t pipeline;
+  uint8_t pipeline;  // MEDIA_PIPELINE or ANNOUNCEMENT_PIPELINE
 
   union {
     std::string *uri;  // Owned pointer, must delete after xQueueReceive (for PLAY_URI and ENQUEUE_URI)
@@ -208,14 +209,13 @@ class SpeakerSourceMediaPlayer : public Component, public media_player::MediaPla
   /// @brief Saves the current volume and mute state to the flash for restoration.
   void save_volume_restore_state_();
 
-  /// @brief Determine media player state from the media pipeline's active source
-  /// @param media_source Active source for the media pipeline (may be nullptr)
-  /// @param playlist_active Whether the media pipeline's playlist is in progress
+  /// @brief Determine media player state from a pipeline's active source
+  /// @param media_source Active source (may be nullptr)
+  /// @param playlist_active Whether the pipeline's playlist is in progress
   /// @param old_state Previous media player state (used for transition smoothing)
   /// @return The appropriate MediaPlayerState
-  media_player::MediaPlayerState get_media_pipeline_state_(media_source::MediaSource *media_source,
-                                                           bool playlist_active,
-                                                           media_player::MediaPlayerState old_state) const;
+  media_player::MediaPlayerState get_source_state_(media_source::MediaSource *media_source, bool playlist_active,
+                                                   media_player::MediaPlayerState old_state) const;
 
   void process_control_queue_();
   void handle_player_command_(media_player::MediaPlayerCommand player_command, uint8_t pipeline);
@@ -235,8 +235,9 @@ class SpeakerSourceMediaPlayer : public Component, public media_player::MediaPla
 
   QueueHandle_t media_control_command_queue_;
 
-  // Pipeline context for media pipeline. See THREADING MODEL at top of namespace for access rules.
-  std::array<PipelineContext, 1> pipelines_;
+  // Pipeline context for media (index 0) and announcement (index 1) pipelines.
+  // See THREADING MODEL at top of namespace for access rules.
+  std::array<PipelineContext, 2> pipelines_;
 
   // Used to save volume/mute state for restoration on reboot
   ESPPreferenceObject pref_;

@@ -128,6 +128,7 @@ void SpeakerSourceMediaPlayer::handle_play_uri_request_(uint8_t pipeline, const 
   // Smart source is requesting the player to play a different URI
   auto call = this->make_call();
   call.set_media_url(uri);
+  call.set_announcement(pipeline == ANNOUNCEMENT_PIPELINE);
   call.perform();
 }
 
@@ -209,7 +210,7 @@ size_t SpeakerSourceMediaPlayer::handle_media_output_(uint8_t pipeline, media_so
 }
 
 // THREAD CONTEXT: Called from main loop (loop)
-media_player::MediaPlayerState SpeakerSourceMediaPlayer::get_media_pipeline_state_(
+media_player::MediaPlayerState SpeakerSourceMediaPlayer::get_source_state_(
     media_source::MediaSource *source, bool playlist_active, media_player::MediaPlayerState old_state) const {
   if (source != nullptr) {
     switch (source->get_state()) {
@@ -218,7 +219,7 @@ media_player::MediaPlayerState SpeakerSourceMediaPlayer::get_media_pipeline_stat
       case media_source::MediaSourceState::PAUSED:
         return media_player::MEDIA_PLAYER_STATE_PAUSED;
       case media_source::MediaSourceState::ERROR:
-        ESP_LOGE(TAG, "Source error");
+        ESP_LOGE(TAG, "Media source error");
         return media_player::MEDIA_PLAYER_STATE_IDLE;
       case media_source::MediaSourceState::IDLE:
       default:
@@ -237,16 +238,47 @@ void SpeakerSourceMediaPlayer::loop() {
   // Process queued control commands
   this->process_control_queue_();
 
-  // Update state based on active sources
+  // Update state based on active sources - announcement pipeline takes priority
   media_player::MediaPlayerState old_state = this->state;
 
+  PipelineContext &ann_ps = this->pipelines_[ANNOUNCEMENT_PIPELINE];
   PipelineContext &media_ps = this->pipelines_[MEDIA_PIPELINE];
 
   // Check playlist state to detect transitions between items
+  bool announcement_playlist_active = (ann_ps.playlist_index < ann_ps.playlist.size()) ||
+                                      (ann_ps.repeat_mode != REPEAT_OFF && !ann_ps.playlist.empty());
   bool media_playlist_active = (media_ps.playlist_index < media_ps.playlist.size()) ||
                                (media_ps.repeat_mode != REPEAT_OFF && !media_ps.playlist.empty());
 
-  this->state = this->get_media_pipeline_state_(media_ps.active_source, media_playlist_active, old_state);
+  // Check announcement pipeline first
+  media_source::MediaSource *announcement_source = ann_ps.active_source;
+  if (announcement_source != nullptr) {
+    media_source::MediaSourceState announcement_state = announcement_source->get_state();
+    if (announcement_state != media_source::MediaSourceState::IDLE) {
+      // Announcement is active - announcements take priority and never report PAUSED
+      switch (announcement_state) {
+        case media_source::MediaSourceState::PLAYING:
+        case media_source::MediaSourceState::PAUSED:  // Treat paused announcements as announcing
+          this->state = media_player::MEDIA_PLAYER_STATE_ANNOUNCING;
+          break;
+        case media_source::MediaSourceState::ERROR:
+          ESP_LOGE(TAG, "Announcement source error");
+          // Fall through to media pipeline state
+          this->state = this->get_source_state_(media_ps.active_source, media_playlist_active, old_state);
+          break;
+        default:
+          break;
+      }
+    } else {
+      // Announcement source is idle, fall through to media pipeline
+      this->state = this->get_source_state_(media_ps.active_source, media_playlist_active, old_state);
+    }
+  } else if (announcement_playlist_active && old_state == media_player::MEDIA_PLAYER_STATE_ANNOUNCING) {
+    this->state = media_player::MEDIA_PLAYER_STATE_ANNOUNCING;
+  } else {
+    // No active announcement, check media pipeline
+    this->state = this->get_source_state_(media_ps.active_source, media_playlist_active, old_state);
+  }
 
   if (this->state != old_state) {
     this->publish_state();
@@ -357,7 +389,7 @@ void SpeakerSourceMediaPlayer::set_playlist_delay_ms(uint8_t pipeline, uint32_t 
 // The timeout callback also runs on the main loop.
 void SpeakerSourceMediaPlayer::queue_play_current_(uint8_t pipeline, uint32_t delay_ms) {
   if (delay_ms > 0) {
-    this->set_timeout(PipelineContext::TIMEOUT_IDS[pipeline], delay_ms,
+    this->set_timeout(PIPELINE_TIMEOUT_IDS[pipeline], delay_ms,
                       [this, pipeline]() { this->queue_command_(MediaPlayerControlCommand::PLAY_CURRENT, pipeline); });
   } else {
     this->queue_command_(MediaPlayerControlCommand::PLAY_CURRENT, pipeline);
@@ -366,7 +398,7 @@ void SpeakerSourceMediaPlayer::queue_play_current_(uint8_t pipeline, uint32_t de
 
 // THREAD CONTEXT: Called from main loop (loop)
 void SpeakerSourceMediaPlayer::process_control_queue_() {
-  MediaPlayerControlCommand control_command;
+  MediaPlayerControlCommand control_command{};
 
   // Use peek to check command without removing it
   if (xQueuePeek(this->media_control_command_queue_, &control_command, 0) != pdTRUE) {
@@ -383,7 +415,7 @@ void SpeakerSourceMediaPlayer::process_control_queue_() {
   switch (control_command.type) {
     case MediaPlayerControlCommand::PLAY_URI: {
       // Always use our local playlist to start playback
-      this->cancel_timeout(PipelineContext::TIMEOUT_IDS[pipeline]);
+      this->cancel_timeout(PIPELINE_TIMEOUT_IDS[pipeline]);
       ps.playlist.clear();
       ps.shuffle_indices.clear();  // Clear shuffle when starting fresh playlist
       ps.playlist_index = 0;       // Reset index
@@ -528,7 +560,7 @@ void SpeakerSourceMediaPlayer::handle_player_command_(media_player::MediaPlayerC
 
     case media_player::MEDIA_PLAYER_COMMAND_STOP: {
       if (!has_internal_playlist) {
-        this->cancel_timeout(PipelineContext::TIMEOUT_IDS[pipeline]);
+        this->cancel_timeout(PIPELINE_TIMEOUT_IDS[pipeline]);
         ps.playlist.clear();
         ps.shuffle_indices.clear();
         ps.playlist_index = 0;
@@ -541,7 +573,7 @@ void SpeakerSourceMediaPlayer::handle_player_command_(media_player::MediaPlayerC
 
     case media_player::MEDIA_PLAYER_COMMAND_NEXT: {
       if (!has_internal_playlist) {
-        this->cancel_timeout(PipelineContext::TIMEOUT_IDS[pipeline]);
+        this->cancel_timeout(PIPELINE_TIMEOUT_IDS[pipeline]);
         if (ps.playlist_index + 1 < ps.playlist.size()) {
           ps.playlist_index++;
           this->queue_command_(MediaPlayerControlCommand::PLAY_CURRENT, pipeline);
@@ -557,7 +589,7 @@ void SpeakerSourceMediaPlayer::handle_player_command_(media_player::MediaPlayerC
 
     case media_player::MEDIA_PLAYER_COMMAND_PREVIOUS: {
       if (!has_internal_playlist) {
-        this->cancel_timeout(PipelineContext::TIMEOUT_IDS[pipeline]);
+        this->cancel_timeout(PIPELINE_TIMEOUT_IDS[pipeline]);
         if (ps.playlist_index > 0) {
           ps.playlist_index--;
           this->queue_command_(MediaPlayerControlCommand::PLAY_CURRENT, pipeline);
@@ -597,7 +629,7 @@ void SpeakerSourceMediaPlayer::handle_player_command_(media_player::MediaPlayerC
 
     case media_player::MEDIA_PLAYER_COMMAND_CLEAR_PLAYLIST: {
       if (!has_internal_playlist) {
-        this->cancel_timeout(PipelineContext::TIMEOUT_IDS[pipeline]);
+        this->cancel_timeout(PIPELINE_TIMEOUT_IDS[pipeline]);
         if (ps.playlist_index < ps.playlist.size()) {
           size_t actual_position = this->get_playlist_position_(pipeline);
           ps.playlist[0] = std::move(ps.playlist[actual_position]);
@@ -644,8 +676,24 @@ void SpeakerSourceMediaPlayer::control(const media_player::MediaPlayerCall &call
     return;
   }
 
-  MediaPlayerControlCommand control_command;
-  control_command.pipeline = MEDIA_PIPELINE;
+  MediaPlayerControlCommand control_command{};
+
+  // Determine which pipeline to use based on announcement flag, falling back if the preferred pipeline
+  // is not configured
+  auto announcement = call.get_announcement();
+  if (announcement.has_value() && announcement.value()) {
+    if (this->pipelines_[ANNOUNCEMENT_PIPELINE].is_configured()) {
+      control_command.pipeline = ANNOUNCEMENT_PIPELINE;
+    } else {
+      control_command.pipeline = MEDIA_PIPELINE;
+    }
+  } else {
+    if (this->pipelines_[MEDIA_PIPELINE].is_configured()) {
+      control_command.pipeline = MEDIA_PIPELINE;
+    } else {
+      control_command.pipeline = ANNOUNCEMENT_PIPELINE;
+    }
+  }
 
   auto media_url = call.get_media_url();
   if (media_url.has_value()) {
