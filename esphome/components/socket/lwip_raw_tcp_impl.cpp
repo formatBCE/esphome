@@ -138,13 +138,46 @@ static const char *const TAG = "socket.lwip";
 #define LWIP_LOG(msg, ...)
 #endif
 
+// Clear arg, recv, and err callbacks, then abort a connected PCB.
+// Only valid for full tcp_pcb (not tcp_pcb_listen).
+// Must be called before destroying the object that tcp_arg points to —
+// tcp_abort() triggers the err callback synchronously, which would
+// otherwise call back into a partially-destroyed object.
+// tcp_sent/tcp_poll are not cleared because this implementation
+// never registers them.
+static void pcb_detach_abort(struct tcp_pcb *pcb) {
+  tcp_arg(pcb, nullptr);
+  tcp_recv(pcb, nullptr);
+  tcp_err(pcb, nullptr);
+  tcp_abort(pcb);
+}
+
+// Clear arg, recv, and err callbacks, then gracefully close a connected PCB.
+// Only valid for full tcp_pcb (not tcp_pcb_listen).
+// After tcp_close(), the PCB remains alive during the TCP close handshake
+// (FIN_WAIT, TIME_WAIT states). Without clearing callbacks first, LWIP
+// would call recv/err on a destroyed socket object, corrupting the heap.
+// tcp_sent/tcp_poll are not cleared because this implementation
+// never registers them.
+// Returns ERR_OK on success; on failure the PCB is aborted instead.
+static err_t pcb_detach_close(struct tcp_pcb *pcb) {
+  tcp_arg(pcb, nullptr);
+  tcp_recv(pcb, nullptr);
+  tcp_err(pcb, nullptr);
+  err_t err = tcp_close(pcb);
+  if (err != ERR_OK) {
+    tcp_abort(pcb);
+  }
+  return err;
+}
+
 // ---- LWIPRawCommon methods ----
 
 LWIPRawCommon::~LWIPRawCommon() {
   LWIP_LOCK();
   if (this->pcb_ != nullptr) {
     LWIP_LOG("tcp_abort(%p)", this->pcb_);
-    tcp_abort(this->pcb_);
+    pcb_detach_abort(this->pcb_);
     this->pcb_ = nullptr;
   }
 }
@@ -222,15 +255,13 @@ int LWIPRawCommon::close() {
     return -1;
   }
   LWIP_LOG("tcp_close(%p)", this->pcb_);
-  err_t err = tcp_close(this->pcb_);
+  err_t err = pcb_detach_close(this->pcb_);
+  this->pcb_ = nullptr;
   if (err != ERR_OK) {
     LWIP_LOG("  -> err %d", err);
-    tcp_abort(this->pcb_);
-    this->pcb_ = nullptr;
     errno = err == ERR_MEM ? ENOMEM : EIO;
     return -1;
   }
-  this->pcb_ = nullptr;
   return 0;
 }
 
@@ -673,13 +704,10 @@ ssize_t LWIPRawImpl::writev(const struct iovec *iov, int iovcnt) {
 LWIPRawListenImpl::~LWIPRawListenImpl() {
   LWIP_LOCK();
   // Abort any queued PCBs that were never accepted by the main loop.
-  // Clear the error callback first — tcp_abort triggers it, and we don't
-  // want s_queued_err_fn writing to slots during destruction.
   for (uint8_t i = 0; i < this->accepted_socket_count_; i++) {
     auto &entry = this->accepted_pcbs_[i];
     if (entry.pcb != nullptr) {
-      tcp_err(entry.pcb, nullptr);
-      tcp_abort(entry.pcb);
+      pcb_detach_abort(entry.pcb);
       entry.pcb = nullptr;
     }
     if (entry.rx_buf != nullptr) {
@@ -691,6 +719,10 @@ LWIPRawListenImpl::~LWIPRawListenImpl() {
   // Listen PCBs must use tcp_close(), not tcp_abort().
   // tcp_abandon() asserts pcb->state != LISTEN and would access
   // fields that don't exist in the smaller tcp_pcb_listen struct.
+  // Don't use pcb_detach_close() here — tcp_recv()/tcp_err() also access
+  // fields that only exist in the full tcp_pcb, not tcp_pcb_listen.
+  // tcp_close() on a listen PCB is synchronous (frees immediately),
+  // so there are no async callbacks to worry about.
   // Close here and null pcb_ so the base destructor skips tcp_abort.
   if (this->pcb_ != nullptr) {
     tcp_close(this->pcb_);
