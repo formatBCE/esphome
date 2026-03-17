@@ -403,10 +403,12 @@ async def filter_out_filter_to_code(config, filter_id):
 QUANTILE_SCHEMA = cv.All(
     cv.Schema(
         {
-            cv.Optional(CONF_WINDOW_SIZE, default=5): cv.positive_not_null_int,
-            cv.Optional(CONF_SEND_EVERY, default=5): cv.positive_not_null_int,
-            cv.Optional(CONF_SEND_FIRST_AT, default=1): cv.positive_not_null_int,
-            cv.Optional(CONF_QUANTILE, default=0.9): cv.zero_to_one_float,
+            cv.Optional(CONF_WINDOW_SIZE, default=5): cv.int_range(min=1, max=65535),
+            cv.Optional(CONF_SEND_EVERY, default=5): cv.int_range(min=1, max=65535),
+            cv.Optional(CONF_SEND_FIRST_AT, default=1): cv.int_range(min=1, max=65535),
+            cv.Optional(CONF_QUANTILE, default=0.9): cv.float_range(
+                min=0, min_included=False, max=1
+            ),
         }
     ),
     validate_send_first_at,
