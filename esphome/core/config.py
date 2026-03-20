@@ -587,7 +587,9 @@ async def _add_looping_components() -> None:
 
 @coroutine_with_priority(CoroPriority.CORE)
 async def to_code(config: ConfigType) -> None:
-    cg.add_global(cg.global_ns.namespace("esphome").using)
+    # using namespace esphome is hardcoded in writer.py to guarantee it
+    # precedes all variable declarations regardless of coroutine priority.
+
     # These can be used by user lambdas, put them to default scope
     cg.add_global(cg.RawExpression("using std::isnan"))
     cg.add_global(cg.RawExpression("using std::min"))
