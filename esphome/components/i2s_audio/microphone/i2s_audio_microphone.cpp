@@ -234,22 +234,11 @@ void I2SAudioMicrophone::mic_task(void *params) {
   I2SAudioMicrophone *this_microphone = (I2SAudioMicrophone *) params;
   xEventGroupSetBits(this_microphone->event_group_, MicrophoneEventGroupBits::TASK_STARTING);
 
-  {  // Ensures the samples vectors are freed when the task stops
-
-    // Decimation parameters: keep 8 bytes out of every 24 (1:3 downsample, 48 kHz -> 16 kHz).
-    constexpr size_t DECIMATION_BLOCK_SIZE = 24;
-    constexpr size_t DECIMATION_COPY_SIZE = 8;
+  {  // Ensures the samples vector is freed when the task stops
 
     const size_t bytes_to_read = this_microphone->audio_stream_info_.ms_to_bytes(READ_DURATION_MS);
     std::vector<uint8_t> samples;
     samples.reserve(bytes_to_read);
-
-    // Pre-allocate the decimated buffer once for the lifetime of the task to avoid
-    // per-callback malloc/free churn that fragments internal heap and starves
-    // other components (e.g. micro_wake_word's TFLite Micro allocations).
-    const size_t max_decimated_bytes = (bytes_to_read / DECIMATION_BLOCK_SIZE) * DECIMATION_COPY_SIZE;
-    std::vector<uint8_t> each_third_sample;
-    each_third_sample.reserve(max_decimated_bytes);
 
     xEventGroupSetBits(this_microphone->event_group_, MicrophoneEventGroupBits::TASK_RUNNING);
 
@@ -262,13 +251,19 @@ void I2SAudioMicrophone::mic_task(void *params) {
           this_microphone->fix_dc_offset_(samples);
         }
 
-        const size_t total_blocks = samples.size() / DECIMATION_BLOCK_SIZE;
-        // resize() within reserved capacity does not reallocate.
-        each_third_sample.resize(total_blocks * DECIMATION_COPY_SIZE);
+        std::vector<uint8_t> each_third_sample;
+        size_t block_size = 24;
+        size_t copy_size = 8;
+        size_t total_blocks = samples.size() / block_size;
+
+        each_third_sample.resize(total_blocks * copy_size);
 
         for (size_t block = 0; block < total_blocks; ++block) {
-          std::copy_n(samples.begin() + block * DECIMATION_BLOCK_SIZE, DECIMATION_COPY_SIZE,
-                      each_third_sample.begin() + block * DECIMATION_COPY_SIZE);
+            std::copy_n(
+                samples.begin() + block * block_size,
+                copy_size,
+                each_third_sample.begin() + block * copy_size
+            );
         }
 
         this_microphone->data_callbacks_.call(each_third_sample);
