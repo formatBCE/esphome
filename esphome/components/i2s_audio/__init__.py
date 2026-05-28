@@ -278,11 +278,14 @@ async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
 
+    # Assign I2S port from _final_validate computed mapping
+    data = _get_data()
+    if (port := data.port_map.get(str(config[CONF_ID]))) is None:
+        raise ValueError(f"No I2S port assigned for {config[CONF_ID]}")
+    cg.add(var.set_port(port))
+
     # Re-enable ESP-IDF's I2S driver (excluded by default to save compile time)
     include_builtin_idf_component("esp_driver_i2s")
-
-    if use_legacy():
-        cg.add_define("USE_I2S_LEGACY")
 
     # Helps avoid callbacks being skipped due to processor load
     add_idf_sdkconfig_option("CONFIG_I2S_ISR_IRAM_SAFE", True)
