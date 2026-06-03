@@ -56,3 +56,12 @@ def test_get_esphome_esp_idf_paths_no_override():
     ) as mock_install:
         toolchain._get_esphome_esp_idf_paths("5.5.4")
     mock_install.assert_called_once_with("5.5.4", source_url=None)
+
+
+def test_get_core_framework_version_from_core_data():
+    """The version is read from CORE.data when validation populated it."""
+    from esphome.components.esp32.const import KEY_ESP32, KEY_IDF_VERSION
+    import esphome.config_validation as cv
+
+    CORE.data = {KEY_ESP32: {KEY_IDF_VERSION: cv.Version(5, 5, 4)}}
+    assert toolchain._get_core_framework_version() == "5.5.4"
