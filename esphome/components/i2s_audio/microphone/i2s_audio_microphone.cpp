@@ -234,11 +234,15 @@ void I2SAudioMicrophone::mic_task(void *params) {
   I2SAudioMicrophone *this_microphone = (I2SAudioMicrophone *) params;
   xEventGroupSetBits(this_microphone->event_group_, MicrophoneEventGroupBits::TASK_STARTING);
 
-  {  // Ensures the samples vector is freed when the task stops
+  {  // Ensures the sample vectors are freed when the task stops
 
-    const size_t bytes_to_read = this_microphone->audio_stream_info_.ms_to_bytes(READ_DURATION_MS);
+    // Read whole 3-frame blocks so the 48 kHz -> 16 kHz decimation below never drops a frame
+    const size_t bytes_to_read = (this_microphone->audio_stream_info_.ms_to_bytes(READ_DURATION_MS) / 24) * 24;
     std::vector<uint8_t> samples;
     samples.reserve(bytes_to_read);
+    // Decimated copy, allocated once: resize() within capacity does not reallocate
+    std::vector<uint8_t> each_third_sample;
+    each_third_sample.reserve(bytes_to_read / 3);
 
     xEventGroupSetBits(this_microphone->event_group_, MicrophoneEventGroupBits::TASK_RUNNING);
 
@@ -251,7 +255,6 @@ void I2SAudioMicrophone::mic_task(void *params) {
           this_microphone->fix_dc_offset_(samples);
         }
 
-        std::vector<uint8_t> each_third_sample;
         size_t block_size = 24;
         size_t copy_size = 8;
         size_t total_blocks = samples.size() / block_size;
