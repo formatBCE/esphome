@@ -87,8 +87,8 @@ def _set_stream_limits(config: ConfigType) -> ConfigType:
         max_bits_per_sample=config.get(CONF_BITS_PER_SAMPLE),
         min_channels=config.get(CONF_NUM_CHANNELS),
         max_channels=config.get(CONF_NUM_CHANNELS),
-        min_sample_rate=config.get(CONF_SAMPLE_RATE),
-        max_sample_rate=config.get(CONF_SAMPLE_RATE),
+        min_sample_rate=16000,
+        max_sample_rate=16000,
     )(config)
 
     return config
